@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Fichador Basico</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav>
+    {% if session.get('user_id') %}
+        <a href="{{ url_for('dashboard') }}">Dashboard</a> |
+        <a href="{{ url_for('mis_fichajes') }}">Mis fichajes</a> |
+        <a href="{{ url_for('logout') }}">Salir</a>
+    {% else %}
+        <a href="{{ url_for('login') }}">Entrar</a> |
+        <a href="{{ url_for('register') }}">Registrarse</a>
+    {% endif %}
+</nav>
+<hr>
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+{% block content %}{% endblock %}
+</body>
+</html>

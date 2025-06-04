@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Mis fichajes</h2>
+<table border="1">
+    <tr><th>Entrada</th><th>Salida</th></tr>
+    {% for f in fichajes %}
+    <tr>
+        <td>{{ f['inicio'] }}</td>
+        <td>{{ f['fin'] or '' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

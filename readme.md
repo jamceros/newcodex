@@ -6,11 +6,22 @@ Pequeña aplicación web para registrar usuarios y fichar inicio y fin de jornad
 
 - Python 3.8+
 - Dependencias listadas en `requirements.txt`
+- Una base de datos MySQL accesible
 
 ## Instalación
 
 ```bash
 pip install -r requirements.txt
+```
+
+Configura las siguientes variables de entorno para conectar con tu base de datos MySQL:
+
+```
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=usuario
+DB_PASSWORD=contraseña
+DB_NAME=fichador
 ```
 
 ## Uso

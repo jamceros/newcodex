@@ -1,32 +1,45 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
+import mysql.connector
 from datetime import datetime
 import os
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'devkey')
-DB_PATH = 'database.db'
+
+# MySQL configuration obtained from environment variables
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+DB_PORT = int(os.environ.get('DB_PORT', '3306'))
+DB_USER = os.environ.get('DB_USER', 'root')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
+DB_NAME = os.environ.get('DB_NAME', 'fichador')
 
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = mysql.connector.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+    )
     cur = conn.cursor()
     cur.execute(
         """CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL
             )""")
     cur.execute(
         """CREATE TABLE IF NOT EXISTS fichajes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                inicio TEXT NOT NULL,
-                fin TEXT,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                inicio DATETIME NOT NULL,
+                fin DATETIME,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )""")
     conn.commit()
+    cur.close()
     conn.close()
 
 
@@ -36,9 +49,13 @@ def setup():
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return mysql.connector.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+    )
 
 
 @app.route('/')
@@ -56,13 +73,18 @@ def register():
         if not username or not password:
             return render_template('register.html', error='Datos requeridos')
         conn = get_db_connection()
+        cur = conn.cursor()
         try:
-            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)',
-                         (username, generate_password_hash(password)))
+            cur.execute(
+                'INSERT INTO users (username, password) VALUES (%s, %s)',
+                (username, generate_password_hash(password))
+            )
             conn.commit()
-        except sqlite3.IntegrityError:
+        except mysql.connector.IntegrityError:
+            cur.close()
             conn.close()
             return render_template('register.html', error='Usuario ya existe')
+        cur.close()
         conn.close()
         return redirect(url_for('login'))
     return render_template('register.html')
@@ -74,7 +96,10 @@ def login():
         username = request.form['username']
         password = request.form['password']
         conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        cur = conn.cursor(dictionary=True)
+        cur.execute('SELECT * FROM users WHERE username = %s', (username,))
+        user = cur.fetchone()
+        cur.close()
         conn.close()
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
@@ -96,9 +121,12 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     conn = get_db_connection()
-    fichaje = conn.execute(
-        'SELECT * FROM fichajes WHERE user_id = ? AND fin IS NULL ORDER BY inicio DESC LIMIT 1',
-        (session['user_id'],)).fetchone()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        'SELECT * FROM fichajes WHERE user_id = %s AND fin IS NULL ORDER BY inicio DESC LIMIT 1',
+        (session['user_id'],))
+    fichaje = cur.fetchone()
+    cur.close()
     conn.close()
     return render_template('dashboard.html', fichaje=fichaje)
 
@@ -108,16 +136,23 @@ def fichar():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     conn = get_db_connection()
-    fichaje = conn.execute(
-        'SELECT * FROM fichajes WHERE user_id = ? AND fin IS NULL ORDER BY inicio DESC LIMIT 1',
-        (session['user_id'],)).fetchone()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        'SELECT * FROM fichajes WHERE user_id = %s AND fin IS NULL ORDER BY inicio DESC LIMIT 1',
+        (session['user_id'],))
+    fichaje = cur.fetchone()
     if fichaje:
-        conn.execute('UPDATE fichajes SET fin = ? WHERE id = ?',
-                     (datetime.now().isoformat(timespec='seconds'), fichaje['id']))
+        cur.execute(
+            'UPDATE fichajes SET fin = %s WHERE id = %s',
+            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), fichaje['id'])
+        )
     else:
-        conn.execute('INSERT INTO fichajes (user_id, inicio) VALUES (?, ?)',
-                     (session['user_id'], datetime.now().isoformat(timespec='seconds')))
+        cur.execute(
+            'INSERT INTO fichajes (user_id, inicio) VALUES (%s, %s)',
+            (session['user_id'], datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        )
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for('dashboard'))
 
@@ -127,8 +162,12 @@ def mis_fichajes():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     conn = get_db_connection()
-    fichajes = conn.execute('SELECT * FROM fichajes WHERE user_id = ? ORDER BY inicio DESC',
-                            (session['user_id'],)).fetchall()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        'SELECT * FROM fichajes WHERE user_id = %s ORDER BY inicio DESC',
+        (session['user_id'],))
+    fichajes = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template('mis_fichajes.html', fichajes=fichajes)
 
